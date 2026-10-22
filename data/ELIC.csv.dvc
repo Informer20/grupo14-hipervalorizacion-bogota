@@ -1,0 +1,5 @@
+outs:
+- md5: 0dd4d70189d3a53b25c35bc793f0d859
+  size: 227041
+  hash: md5
+  path: ELIC.csv

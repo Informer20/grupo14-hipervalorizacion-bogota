@@ -1,0 +1,4 @@
+[core]
+    remote = aws-remote
+['remote "aws-remote"']
+    url = s3://grupo14-hipervalorizacion-bogota/dvc-store
