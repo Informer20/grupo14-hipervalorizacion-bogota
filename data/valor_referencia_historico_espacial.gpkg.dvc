@@ -1,0 +1,5 @@
+outs:
+- md5: 7467aba2aeac3cd337e6414f848626c0
+  size: 823922688
+  hash: md5
+  path: valor_referencia_historico_espacial.gpkg
