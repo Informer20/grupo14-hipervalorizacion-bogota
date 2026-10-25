@@ -1,0 +1,5 @@
+outs:
+- md5: db11d103b222b8a5e6b3073bcbcc95d0
+  size: 4759091
+  hash: md5
+  path: listings_barrio_localidad.csv
