@@ -1,5 +1,5 @@
 outs:
-- md5: 42248a4f928b21e92923e82ddc114eb2
-  size: 7290880
+- md5: ff3437fe5f6bfc3acca9008e2d592640
+  size: 5115904
   hash: md5
   path: matriz_barrios_unificada.gpkg
