@@ -3,21 +3,19 @@ import dash
 from dash import dcc, html
 import dash_bootstrap_components as dbc
 import plotly.graph_objects as go
+from map_view import create_map
 
-# --------------------------------------------------
 # 1. CONFIGURACIÓN GENERAL
-# --------------------------------------------------
+
 
 app = dash.Dash(
     __name__,
     external_stylesheets=[dbc.themes.DARKLY]
 )
 
-app.title = "UrbanEye | Bogotá"
+app.title = "UrbanEye - revisar nombre -| Bogotá"
 
-# --------------------------------------------------
 # 2. COLORES
-# --------------------------------------------------
 
 COLORS = {
     "background": "#101827",
@@ -32,9 +30,7 @@ COLORS = {
     "yellow": "#EAB308"
 }
 
-# --------------------------------------------------
 # 3. COMPONENTES REUTILIZABLES
-# --------------------------------------------------
 
 def create_kpi(title, value, subtitle):
     return dbc.Card(
@@ -47,9 +43,7 @@ def create_kpi(title, value, subtitle):
     )
 
 
-# --------------------------------------------------
-# 4. GRÁFICO DEMOSTRATIVO
-# --------------------------------------------------
+# 4. GRÁFICO 
 
 price_chart = go.Figure()
 
@@ -76,15 +70,13 @@ price_chart.update_layout(
     )
 )
 
-# --------------------------------------------------
 # 5. PANEL IZQUIERDO
-# --------------------------------------------------
 
 sidebar = dbc.Card([
     dbc.CardBody([
         html.H5("Configuración del escenario"),
         html.P(
-            "Selecciona el territorio y define un escenario hipotético.",
+            "Selecciona el territorio y define un escenario.",
             className="section-description"
         ),
 
@@ -114,7 +106,7 @@ sidebar = dbc.Card([
 
         html.Br(),
 
-        html.Label("Nuevos alojamientos hipotéticos"),
+        html.Label("Nuevos alojamientos"),
         html.H4("350", className="slider-value"),
 
         dcc.Slider(
@@ -164,7 +156,7 @@ sidebar = dbc.Card([
         ),
 
         html.P(
-            "Prototipo visual. Los controles aún no ejecutan cálculos.",
+            "Los controles aún no ejecutan cálculos.",
             className="prototype-note"
         )
     ])
@@ -172,7 +164,7 @@ sidebar = dbc.Card([
 
 
 # --------------------------------------------------
-# 6. MAPA DEMOSTRATIVO
+# 6. MAPA TERRITORIAL REAL
 # --------------------------------------------------
 
 map_card = dbc.Card([
@@ -193,27 +185,22 @@ map_card = dbc.Card([
         ]),
 
         html.P(
-            "Bogotá D.C. | Distribución por sectores catastrales",
+            "Bogotá D.C. | Sectores catastrales",
             className="section-description"
         ),
 
-        html.Div([
-            html.Div([
-                html.Div(className="map-placeholder-icon"),
-                html.H4("Mapa territorial de Bogotá"),
-                html.P(
-                    "Aquí se visualizarán los sectores catastrales "
-                    "según la densidad de alojamientos Airbnb."
-                ),
-                dbc.Badge(
-                    "Mapa ilustrativo pendiente de integración",
-                    color="secondary"
-                )
-            ], className="map-placeholder-content")
-        ], className="map-placeholder")
+        dcc.Graph(
+            id="territorial-map",
+            figure=create_map(),
+            config={
+                "displayModeBar": False,
+                "scrollZoom": True,
+                "responsive": True
+            },
+            style={"height": "540px"}
+        )
     ])
 ], className="main-card map-card")
-
 
 # --------------------------------------------------
 # 7. PANEL DERECHO
@@ -266,7 +253,7 @@ chart_card = dbc.Card([
             config={"displayModeBar": False}
         ),
         html.P(
-            "Valores demostrativos, no corresponden a predicciones reales.",
+            "No corresponden a predicciones reales.",
             className="prototype-note"
         )
     ])
@@ -282,12 +269,12 @@ header = dbc.Navbar(
         html.Div([
             html.Span("URBANEYE", className="brand-name"),
             html.Span(
-                " | BOGOTÁ PLANNING HUB",
+                " | ver que poner aquí",
                 className="brand-subtitle"
             )
         ]),
         dbc.Badge(
-            "PROTOTIPO VISUAL",
+            "PRIMER VISUAL",
             color="info",
             className="p-2"
         )
@@ -330,10 +317,7 @@ app.layout = html.Div([
 
 ], className="app-background")
 
-
-# --------------------------------------------------
 # 9. EJECUTAR APLICACIÓN
-# --------------------------------------------------
 
 if __name__ == "__main__":
     app.run(debug=True, port=8050)
