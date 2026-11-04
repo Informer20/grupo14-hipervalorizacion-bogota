@@ -57,7 +57,7 @@ def create_map(localidad=None, barrio=None):
         },
         labels={
             "localidad": "Localidad",
-            "densidad_airbnb_km2": "Propiedades/km²",
+            "densidad_airbnb_km2": "Anuncios Airbnb/km²",
             "num_listings_airbnb": "Anuncios Airbnb"
         }
     )
@@ -95,7 +95,7 @@ def create_map(localidad=None, barrio=None):
         margin=dict(l=0, r=0, t=5, b=0),
         height=520,
         coloraxis_colorbar=dict(
-            title="Propiedades/km²",
+            title="",
             thickness=14
         )
     )
