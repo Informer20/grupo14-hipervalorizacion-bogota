@@ -282,9 +282,11 @@ map_card = dbc.Card(
             ),
             dcc.Graph(
                 id="territorial-map",
-                figure=create_map(DEFAULT_LOCALIDAD, DEFAULT_BARRIO),
-                config={"displayModeBar": False, "scrollZoom": True, "responsive": True},
-                style={"height": "520px"},
+                figure=create_map(
+                    DEFAULT_LOCALIDAD,
+                    DEFAULT_BARRIO
+                ),
+                style={"height": "520px"}
             ),
         ]
     ),
