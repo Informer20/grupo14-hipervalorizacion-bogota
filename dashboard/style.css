@@ -402,5 +402,10 @@
 
     /* Ocultar la barra de herramientas de Plotly */
     .modebar-container {
-    display: none !important;
+        display: none !important;
+    }
+
+    /* Escala general del dashboard */
+    body {
+        zoom: 1;
     }
