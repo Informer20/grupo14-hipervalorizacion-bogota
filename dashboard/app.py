@@ -154,12 +154,13 @@ def aggregate_neighborhood(localidad, barrio):
         ].fillna(0).sum(),
     }
 
-    for column in ("v_ref_2015", "v_ref_2025", "v_ref_2026", "cagr_15_25"):
+    weights = selected["area_km2"].fillna(0)
+    total_area = weights.sum()
+    for column in ("v_ref_2015", "v_ref_2025", "cagr_15_25"):
         values = selected[column].fillna(0)
-        weights = selected["area_km2"].fillna(0)
         record[column] = (
-            (values * weights).sum() / weights.sum()
-            if weights.sum()
+            (values * weights).sum() / total_area
+            if total_area
             else values.mean()
         )
     return record
@@ -187,20 +188,7 @@ def create_price_chart(record, predicted_value=None):
             hovertemplate="%{x}<br>$ %{y:.2f} millones/m²<extra></extra>",
         )
     )
-    figure.update_layout(
-        yaxis={
-            "title": {
-                "text": "Millones de pesos/m²",
-                "font": {"size": 9},
-                "standoff": 2,
-            },
-            "tickfont": {"size": 8},
-            "tickformat": ".1f",
-            "gridcolor": "#253449",
-            "range": [0, max(values) * 1.3],
-        },
-        xaxis={"tickfont": {"size": 9}},
-    )
+    figure.update_layout(yaxis={"range": [0, max(values) * 1.3]})
     return figure
 
 
@@ -229,7 +217,7 @@ def create_details(record, new_listings):
                     html.P(label, className="detail-label"),
                     html.P(value, className="detail-value"),
                 ],
-                className="detail-item kpi-card",
+                className="detail-item",
             ),
             xs=6,
             sm=6,
