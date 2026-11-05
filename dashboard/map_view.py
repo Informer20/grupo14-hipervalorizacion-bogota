@@ -20,9 +20,33 @@ def load_geodata():
     ).reset_index(drop=True)
 
 
-def create_map(localidad=None, barrio=None):
+def create_map(localidad=None, barrio=None, predicted_value=None):
     gdf = load_geodata().copy()
     gdf["sector_id"] = gdf.index.astype(str)
+
+    if localidad and barrio:
+        seleccionado = gdf[
+            (gdf["localidad"] == localidad) & (gdf["barrio"] == barrio)
+        ]
+    else:
+        seleccionado = gdf.iloc[0:0]
+
+    hover_data = {
+        "localidad": True,
+        "densidad_airbnb_km2": ":.2f",
+        "num_listings_airbnb": True,
+        "sector_id": False,
+    }
+    labels = {
+        "localidad": "Localidad",
+        "densidad_airbnb_km2": "Anuncios Airbnb/km²",
+        "num_listings_airbnb": "Anuncios Airbnb",
+    }
+    if predicted_value is not None and not seleccionado.empty:
+        gdf["v_ref_2026_predicho"] = float("nan")
+        gdf.loc[seleccionado.index, "v_ref_2026_predicho"] = predicted_value
+        hover_data["v_ref_2026_predicho"] = ":,.0f"
+        labels["v_ref_2026_predicho"] = "Predicción CatBoost 2026 ($/m²)"
 
     geojson = gdf.__geo_interface__
     points = gdf.geometry.representative_point()
@@ -49,25 +73,9 @@ def create_map(localidad=None, barrio=None):
         zoom=10,
         opacity=0.85,
         hover_name="barrio",
-        hover_data={
-            "localidad": True,
-            "densidad_airbnb_km2": ":.2f",
-            "num_listings_airbnb": True,
-            "sector_id": False
-        },
-        labels={
-            "localidad": "Localidad",
-            "densidad_airbnb_km2": "Anuncios Airbnb/km²",
-            "num_listings_airbnb": "Anuncios Airbnb"
-        }
+        hover_data=hover_data,
+        labels=labels,
     )
-
-    if localidad and barrio:
-        seleccionado = gdf[
-            (gdf["localidad"] == localidad) & (gdf["barrio"] == barrio)
-        ]
-    else:
-        seleccionado = gdf.iloc[0:0]
 
     if not seleccionado.empty:
         fig.add_trace(
