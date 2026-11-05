@@ -1,0 +1,8 @@
+catboost>=1.2.8,<2
+dash>=2.18,<5
+dash-bootstrap-components>=1.6,<3
+geopandas>=1.0,<2
+numpy>=1.24,<3
+pandas>=2.2,<4
+plotly>=5.24,<8
+scikit-learn>=1.5,<2

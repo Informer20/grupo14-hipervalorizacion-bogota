@@ -159,6 +159,27 @@
         cursor: not-allowed;
     }
 
+    .prediction-status {
+        color: #86efac;
+        font-size: 11px;
+        line-height: 1.35;
+        margin: 8px 0 0;
+    }
+
+    .prediction-status:empty {
+        display: none;
+    }
+
+    .prediction-loading {
+        align-items: center;
+        color: #bfdbfe;
+        display: flex;
+        gap: 8px;
+        justify-content: center;
+        min-height: 28px;
+        font-size: 11px;
+    }
+
     .kpi-card {
         min-height: 105px;
     }
