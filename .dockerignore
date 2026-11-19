@@ -1,0 +1,13 @@
+.git
+.dvc
+.tox
+__pycache__
+*.py[cod]
+.pytest_cache
+.venv
+env-dvc
+notebooks
+tests
+docs
+src
+dashboard/models

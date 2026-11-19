@@ -1,13 +1,25 @@
+"""Interfaz Dash: filtros, mapa, métricas, semáforo y solicitud de predicción."""
+
+import os
 from pathlib import Path
 
 import dash
-from catboost import CatBoostError
 from dash import Input, Output, State, dcc, html, no_update
 import dash_bootstrap_components as dbc
 import plotly.graph_objects as go
 
+from api.client import PredictionAPIError, predict_neighborhood
+from api.model.features import (
+    build_feature_metadata,
+    max_new_listings_for_density,
+    peer_density_ceiling,
+)
 from map_view import create_map, load_geodata
-from predictor import predict_2026
+from risk import (
+    calculate_growth_percent,
+    classify_risk,
+    observed_growth_thresholds,
+)
 
 
 ASSETS_DIR = Path(__file__).resolve().parent
@@ -21,6 +33,8 @@ DEFAULT_BARRIOS = sorted(
     .tolist()
 )
 DEFAULT_BARRIO = "LOS ROSALES" if "LOS ROSALES" in DEFAULT_BARRIOS else DEFAULT_BARRIOS[0]
+MAX_SCENARIO_NEW_LISTINGS = 1000
+SCENARIO_NEW_LISTINGS_STEP = 50
 
 COLORS = {
     "background": "#0b0f19",
@@ -42,6 +56,7 @@ app.title = "Análisis territorial | Bogotá"
 
 
 def create_empty_chart():
+    """Crea la gráfica vacía con el tema oscuro y las unidades del tablero."""
     figure = go.Figure()
     figure.update_layout(
         template="plotly_dark",
@@ -68,48 +83,28 @@ def create_empty_chart():
 
 
 def format_integer(value):
+    """Muestra un valor numérico entero con separadores de miles en español."""
     return f"{int(round(float(value))):,}".replace(",", ".")
 
 
 def format_currency(value):
+    """Muestra un precio por metro cuadrado o el texto de dato pendiente."""
     if value is None:
         return "Pendiente"
     return f"$ {format_integer(value)}"
 
 
-def classify_risk(cagr_percent, green_limit, yellow_limit, red_start):
-    thresholds_valid = (
-        green_limit is not None
-        and yellow_limit is not None
-        and red_start is not None
-        and 0 <= green_limit < yellow_limit < red_start
-    )
-    if not thresholds_valid:
-        return (
-            "Configura valores en orden: verde < amarillo < rojo.",
-            "risk-alert invalid",
-            "sin clasificar",
-        )
-    if cagr_percent <= green_limit:
-        return (
-            f"El crecimiento histórico de {cagr_percent:.2f}% se ubica en zona verde.",
-            "risk-alert green",
-            "verde",
-        )
-    if cagr_percent >= red_start:
-        return (
-            f"El crecimiento histórico de {cagr_percent:.2f}% se ubica en zona roja.",
-            "risk-alert red",
-            "roja",
-        )
-    return (
-        f"El crecimiento histórico de {cagr_percent:.2f}% se ubica en zona amarilla.",
-        "risk-alert yellow",
-        "amarilla",
-    )
+DEFAULT_GREEN_THRESHOLD, DEFAULT_YELLOW_THRESHOLD = observed_growth_thresholds(GDF)
 
 
-def build_diagnosis(record, risk_zone, new_listings, predicted_value=None):
+def build_diagnosis(
+    record,
+    risk_zone,
+    new_listings,
+    predicted_value=None,
+    predicted_growth_percent=None,
+):
+    """Redacta el resumen del barrio y, si existe, del escenario predicho."""
     diagnosis = (
         f"En el barrio {record['barrio'].title()}, localidad de "
         f"{record['localidad'].title()}, predomina el estrato "
@@ -120,20 +115,31 @@ def build_diagnosis(record, risk_zone, new_listings, predicted_value=None):
         f"y {format_integer(record['num_estaciones_transmilenio'])} estaciones de "
         f"TransMilenio. Su valor de referencia en 2025 fue de "
         f"{format_currency(record['v_ref_2025'])} por m² y el CAGR histórico "
-        f"2015–2025 es de {record['cagr_15_25'] * 100:.2f}%. Según los umbrales "
-        f"configurados, el crecimiento histórico se ubica en zona {risk_zone}; "
-        "este semáforo es descriptivo y no constituye por sí mismo una predicción."
+        f"2015–2025 es de {record['cagr_15_25'] * 100:.2f}%."
     )
     if predicted_value is not None:
+        scenario_listings = int(record["num_listings_airbnb"]) + int(new_listings)
+        scenario_density = scenario_listings / record["area_km2"]
         diagnosis += (
             f" Para el escenario de {format_integer(new_listings)} nuevos "
-            f"alojamientos, CatBoost estima un valor de referencia para 2026 de "
-            f"{format_currency(predicted_value)} por m²."
+            f"alojamientos (total considerado: "
+            f"{format_integer(scenario_listings)}, equivalente a "
+            f"{scenario_density:.2f} propiedades por km²), XGBoost estima un "
+            f"valor de referencia para 2026 de {format_currency(predicted_value)} "
+            f"por m². Esto equivale a un crecimiento predicho de "
+            f"{predicted_growth_percent:.2f}% frente a 2025, clasificado en "
+            f"zona {risk_zone} según los umbrales definidos."
+        )
+    else:
+        diagnosis += (
+            " Ejecuta la predicción para calcular el crecimiento de 2026 frente "
+            "a 2025 y clasificarlo en el semáforo."
         )
     return diagnosis
 
 
 def aggregate_neighborhood(localidad, barrio):
+    """Reúne las métricas de los sectores que componen el barrio seleccionado."""
     selected = GDF[
         (GDF["localidad"] == localidad) & (GDF["barrio"] == barrio)
     ]
@@ -167,6 +173,7 @@ def aggregate_neighborhood(localidad, barrio):
 
 
 def create_price_chart(record, predicted_value=None):
+    """Compara el valor de referencia de 2025 con la predicción opcional."""
     labels = ["2025 referencia"]
     values = [record["v_ref_2025"] / 1_000_000]
     colors = [COLORS["blue"]]
@@ -193,6 +200,7 @@ def create_price_chart(record, predicted_value=None):
 
 
 def create_details(record, new_listings):
+    """Crea la ficha con las métricas del barrio y los anuncios del escenario."""
     details = [
         ("Localidad", record["localidad"].title()),
         ("Barrio", record["barrio"].title()),
@@ -207,6 +215,14 @@ def create_details(record, new_listings):
         (
             "Valor de referencia 2026 predicho",
             f'{format_currency(record.get("v_ref_2026_predicho"))} /m²',
+        ),
+        (
+            "Crecimiento predicho 2026 vs. 2025",
+            (
+                f'{record["crecimiento_predicho_2026_pct"]:.2f}%'
+                if record.get("crecimiento_predicho_2026_pct") is not None
+                else "Pendiente"
+            ),
         ),
         ("CAGR histórico 2015–2025", f'{record["cagr_15_25"] * 100:.2f}%'),
     ]
@@ -255,7 +271,7 @@ sidebar = dbc.Card(
             html.Hr(),
             html.H5("Nuevos alojamientos"),
             html.P(
-                "Este valor se usará como num_listings_airbnb en el escenario.",
+                "El máximo se calcula con barrios comparables por estrato, localidad y valor de referencia.",
                 className="section-description",
             ),
             html.H4(id="new-listings-label", className="slider-value"),
@@ -264,7 +280,7 @@ sidebar = dbc.Card(
                 min=0,
                 max=1000,
                 step=50,
-                value=350,
+                value=0,
                 marks={
                     0: {"label": "0", "style": {"color": "#ffffff"}},
                     500: {"label": "500", "style": {"color": "#ffffff"}},
@@ -276,9 +292,15 @@ sidebar = dbc.Card(
             html.Hr(),
             html.Div(
                 [
-                    html.H5("Semáforo de riesgo histórico"),
+                    html.H5("Semáforo de riesgo predicho"),
                     html.P(
-                        "Clasifica el CAGR 2015–2025 del territorio seleccionado.",
+                        (
+                            "Clasifica el crecimiento que predice el modelo para 2026 "
+                            "frente al valor observado de 2025. Los valores iniciales "
+                            f"({DEFAULT_GREEN_THRESHOLD:.1f}% y "
+                            f"{DEFAULT_YELLOW_THRESHOLD:.1f}%) son los percentiles "
+                            "33 y 67 del crecimiento histórico observado; puedes cambiarlos."
+                        ),
                         className="section-description",
                     ),
                     dbc.Row(
@@ -290,47 +312,33 @@ sidebar = dbc.Card(
                                         id="green-threshold",
                                         className="threshold-input green",
                                         type="number",
-                                        min=0,
-                                        value=5,
+                                        step="any",
+                                        value=DEFAULT_GREEN_THRESHOLD,
                                     ),
                                 ],
-                                xs=12,
-                                md=4,
+                                xs=6,
+                                md=6,
                             ),
                             dbc.Col(
                                 [
-                                    html.Label("Amarillo: hasta (%)"),
+                                    html.Label("Amarillo: máximo (%)"),
                                     dbc.Input(
                                         id="yellow-threshold",
                                         className="threshold-input yellow",
                                         type="number",
-                                        min=0,
-                                        value=15,
+                                        step="any",
+                                        value=DEFAULT_YELLOW_THRESHOLD,
                                     ),
                                 ],
-                                xs=12,
-                                md=4,
-                            ),
-                            dbc.Col(
-                                [
-                                    html.Label("Rojo: desde (%)"),
-                                    dbc.Input(
-                                        id="red-threshold",
-                                        className="threshold-input red",
-                                        type="number",
-                                        min=0,
-                                        value=20,
-                                    ),
-                                ],
-                                xs=12,
-                                md=4,
+                                xs=6,
+                                md=6,
                             ),
                         ],
                         className="g-2",
                     ),
                     html.Div(id="risk-alert", className="risk-alert", role="status"),
                     html.P(
-                        "Indicador descriptivo del crecimiento histórico; no es una predicción.",
+                        "Verde: hasta el primer umbral; amarillo: entre umbrales; rojo: por encima del segundo.",
                         className="prototype-note",
                     ),
                     dbc.Button(
@@ -448,6 +456,7 @@ chart_card = dbc.Card(
 
 app.layout = html.Div(
     [
+        dcc.Store(id="prediction-result-store"),
         dbc.Container(
             [
                 html.Div(
@@ -498,15 +507,51 @@ app.layout = html.Div(
 @app.callback(
     Output("barrio-select", "options"),
     Output("barrio-select", "value"),
+    Output("new-listings", "max"),
+    Output("new-listings", "value"),
+    Output("new-listings", "marks"),
     Input("localidad-select", "value"),
     Input("barrio-select", "value"),
+    State("new-listings", "value"),
 )
-def update_neighborhood_options(localidad, current_barrio):
+def update_neighborhood_options(localidad, current_barrio, current_new_listings):
+    """Actualiza barrios y limita el deslizador a densidades comparables."""
     barrios = sorted(
         GDF.loc[GDF["localidad"] == localidad, "barrio"].dropna().unique().tolist()
     )
     selected = current_barrio if current_barrio in barrios else (barrios[0] if barrios else None)
-    return [{"label": barrio.title(), "value": barrio} for barrio in barrios], selected
+    record = aggregate_neighborhood(localidad, selected) if selected else None
+    if record and record["area_km2"] > 0:
+        profiles = build_feature_metadata()["neighborhood_profiles"]
+        max_density = peer_density_ceiling(record, profiles)
+        allowed_new_listings = max_new_listings_for_density(
+            record,
+            max_density,
+            MAX_SCENARIO_NEW_LISTINGS,
+        )
+        allowed_new_listings = (
+            allowed_new_listings // SCENARIO_NEW_LISTINGS_STEP
+        ) * SCENARIO_NEW_LISTINGS_STEP
+    else:
+        allowed_new_listings = 0
+
+    clamped_new_listings = min(
+        int(current_new_listings or 0),
+        allowed_new_listings,
+    )
+    marks = {0: {"label": "0", "style": {"color": "#ffffff"}}}
+    if allowed_new_listings > 0:
+        marks[allowed_new_listings] = {
+            "label": format_integer(allowed_new_listings),
+            "style": {"color": "#ffffff"},
+        }
+    return (
+        [{"label": barrio.title(), "value": barrio} for barrio in barrios],
+        selected,
+        allowed_new_listings,
+        clamped_new_listings,
+        marks,
+    )
 
 
 @app.callback(
@@ -524,10 +569,20 @@ def update_neighborhood_options(localidad, current_barrio):
     Input("barrio-select", "value"),
     Input("green-threshold", "value"),
     Input("yellow-threshold", "value"),
-    Input("red-threshold", "value"),
     Input("new-listings", "value"),
+    Input("prediction-result-store", "data"),
+    State("new-listings", "max"),
 )
-def update_dashboard(localidad, barrio, green_limit, yellow_limit, red_start, new_listings):
+def update_dashboard(
+    localidad,
+    barrio,
+    green_limit,
+    yellow_limit,
+    new_listings,
+    prediction_result,
+    max_new_listings,
+):
+    """Actualiza el contexto y reclasifica el último escenario predicho."""
     if not localidad or not barrio:
         return (
             create_empty_chart(),
@@ -551,51 +606,101 @@ def update_dashboard(localidad, barrio, green_limit, yellow_limit, red_start, ne
             "No hay datos disponibles para este territorio.",
             [],
             create_empty_chart(),
-            f"{format_integer(new_listings)} alojamientos",
+            (
+                f"{format_integer(new_listings)} alojamientos nuevos "
+                f"(máximo permitido: {format_integer(max_new_listings)})"
+            ),
             "No se puede calcular el semáforo sin datos.",
             "risk-alert invalid",
             "",
         )
 
-    cagr_percent = record["cagr_15_25"] * 100
-    risk_message, risk_class, risk_zone = classify_risk(
-        cagr_percent,
-        green_limit,
-        yellow_limit,
-        red_start,
-    )
-
     locality_name = localidad.title()
     neighborhood_name = barrio.title()
-    diagnosis = build_diagnosis(record, risk_zone, new_listings or 0)
+    matching_result = (
+        prediction_result
+        and prediction_result.get("localidad") == localidad
+        and prediction_result.get("barrio") == barrio
+        and prediction_result.get("new_listings") == int(new_listings or 0)
+    )
+    predicted_value = (
+        float(prediction_result["prediction"])
+        if matching_result and "prediction" in prediction_result
+        else None
+    )
+    predicted_growth_percent = (
+        calculate_growth_percent(predicted_value, record["v_ref_2025"])
+        if predicted_value is not None and record["v_ref_2025"] > 0
+        else None
+    )
+    if predicted_growth_percent is not None:
+        risk_message, risk_class, risk_zone = classify_risk(
+            predicted_growth_percent,
+            green_limit,
+            yellow_limit,
+        )
+    else:
+        threshold_message, threshold_class, threshold_zone = classify_risk(
+            0,
+            green_limit,
+            yellow_limit,
+        )
+        if threshold_zone == "sin clasificar":
+            risk_message, risk_class, risk_zone = (
+                threshold_message,
+                threshold_class,
+                threshold_zone,
+            )
+        else:
+            risk_message = (
+                "Ejecuta la predicción para clasificar el crecimiento de 2026."
+            )
+            risk_class = "risk-alert"
+            risk_zone = "pendiente"
+
+    if predicted_value is not None:
+        record["v_ref_2026_predicho"] = predicted_value
+        record["crecimiento_predicho_2026_pct"] = predicted_growth_percent
+    diagnosis = build_diagnosis(
+        record,
+        risk_zone,
+        new_listings or 0,
+        predicted_value,
+        predicted_growth_percent,
+    )
+    if matching_result and prediction_result.get("error"):
+        current_status = prediction_result["error"]
+    elif predicted_value is not None:
+        current_status = (
+            f"Predicción XGBoost para {neighborhood_name}: "
+            f"{format_currency(predicted_value)} por m²."
+        )
+    else:
+        current_status = ""
 
     return (
-        create_map(localidad, barrio),
+        create_map(localidad, barrio, predicted_value),
         f"{neighborhood_name} | {locality_name}",
         f"{neighborhood_name} · {locality_name}",
         diagnosis,
         create_details(record, new_listings or 0),
-        create_price_chart(record),
-        f"{format_integer(new_listings or 0)} alojamientos",
+        create_price_chart(record, predicted_value),
+        (
+            f"{format_integer(new_listings or 0)} alojamientos nuevos "
+            f"(máximo comparable: {format_integer(max_new_listings)})"
+        ),
         risk_message,
         risk_class,
-        "",
+        current_status,
     )
 
 
 @app.callback(
-    Output("territorial-map", "figure", allow_duplicate=True),
-    Output("diagnosis-text", "children", allow_duplicate=True),
-    Output("territory-details", "children", allow_duplicate=True),
-    Output("price-chart", "figure", allow_duplicate=True),
-    Output("prediction-status", "children", allow_duplicate=True),
+    Output("prediction-result-store", "data"),
     Input("run-prediction", "n_clicks"),
     State("localidad-select", "value"),
     State("barrio-select", "value"),
     State("new-listings", "value"),
-    State("green-threshold", "value"),
-    State("yellow-threshold", "value"),
-    State("red-threshold", "value"),
     prevent_initial_call=True,
     running=[
         (Output("run-prediction", "disabled"), True, False),
@@ -611,61 +716,42 @@ def run_prediction(
     localidad,
     barrio,
     num_listings_airbnb,
-    green_limit,
-    yellow_limit,
-    red_start,
 ):
+    """Solicita una predicción y la guarda para mostrarla y clasificarla."""
     if not n_clicks:
-        return no_update, no_update, no_update, no_update, ""
+        return no_update
 
     if not localidad or not barrio:
-        return (
-            no_update,
-            no_update,
-            no_update,
-            no_update,
-            "Selecciona una localidad y un barrio antes de ejecutar la predicción.",
-        )
+        return {
+            "error": "Selecciona una localidad y un barrio antes de ejecutar la predicción."
+        }
 
     record = aggregate_neighborhood(localidad, barrio)
     if record is None:
-        return (
-            no_update,
-            no_update,
-            no_update,
-            no_update,
-            "No se encontraron datos para el territorio seleccionado.",
-        )
+        return {"error": "No se encontraron datos para el territorio seleccionado."}
 
     try:
-        prediction = predict_2026(record, num_listings_airbnb or 0)
-    except (FileNotFoundError, ValueError, CatBoostError) as error:
-        return no_update, no_update, no_update, no_update, f"No se pudo predecir: {error}"
+        prediction = predict_neighborhood(record, num_listings_airbnb or 0)
+    except PredictionAPIError as error:
+        return {
+            "localidad": localidad,
+            "barrio": barrio,
+            "new_listings": int(num_listings_airbnb or 0),
+            "error": f"No se pudo predecir: {error}",
+        }
 
-    record["v_ref_2026_predicho"] = prediction
-    _, _, risk_zone = classify_risk(
-        record["cagr_15_25"] * 100,
-        green_limit,
-        yellow_limit,
-        red_start,
-    )
-    status = (
-        f"Predicción CatBoost para {barrio.title()}: "
-        f"{format_currency(prediction)} por m²."
-    )
-    return (
-        create_map(localidad, barrio, prediction),
-        build_diagnosis(
-            record,
-            risk_zone,
-            num_listings_airbnb or 0,
-            prediction,
-        ),
-        create_details(record, num_listings_airbnb or 0),
-        create_price_chart(record, prediction),
-        status,
-    )
+    prediction_result = {
+        "localidad": localidad,
+        "barrio": barrio,
+        "new_listings": int(num_listings_airbnb or 0),
+        "prediction": prediction,
+    }
+    return prediction_result
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=8050)
+    app.run(
+        debug=os.getenv("DASH_DEBUG", "true").lower() == "true",
+        host=os.getenv("URBAN_AI_DASH_HOST", "127.0.0.1"),
+        port=int(os.getenv("PORT", "8050")),
+    )

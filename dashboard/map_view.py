@@ -1,6 +1,8 @@
 
-from pathlib import Path
+"""Carga el GeoPackage y construye el mapa coroplético del dashboard."""
+
 from functools import lru_cache
+from pathlib import Path
 
 import geopandas as gpd
 import plotly.express as px
@@ -14,6 +16,7 @@ GPKG_PATH = BASE_DIR / "data" / "matriz_barrios_unificada.gpkg"
 
 @lru_cache(maxsize=1)
 def load_geodata():
+    """Lee una vez la capa geográfica local para reutilizarla en los callbacks."""
     return gpd.read_file(
         GPKG_PATH,
         layer="matriz_barrios_unificada",
@@ -21,6 +24,7 @@ def load_geodata():
 
 
 def create_map(localidad=None, barrio=None, predicted_value=None):
+    """Dibuja los sectores, resalta el barrio y agrega el valor predicho al hover."""
     gdf = load_geodata().copy()
     gdf["sector_id"] = gdf.index.astype(str)
 
@@ -46,7 +50,7 @@ def create_map(localidad=None, barrio=None, predicted_value=None):
         gdf["v_ref_2026_predicho"] = float("nan")
         gdf.loc[seleccionado.index, "v_ref_2026_predicho"] = predicted_value
         hover_data["v_ref_2026_predicho"] = ":,.0f"
-        labels["v_ref_2026_predicho"] = "Predicción CatBoost 2026 ($/m²)"
+        labels["v_ref_2026_predicho"] = "Predicción XGBoost 2026 ($/m²)"
 
     geojson = gdf.__geo_interface__
     points = gdf.geometry.representative_point()
