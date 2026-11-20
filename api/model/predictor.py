@@ -80,6 +80,10 @@ def predict_2026(input_data: dict) -> float:
         metadata["feature_columns"],
         metadata["locality_categories"],
     )
+    if "num_estaciones_transmilenio" in features.columns:
+        features["num_estaciones_transmilenio"] = (
+            features["num_estaciones_transmilenio"].round().astype("int64")
+        )
     prediction = float(np.asarray(model.predict(features)).reshape(-1)[0])
     if not np.isfinite(prediction):
         raise ValueError("XGBoost devolvió una predicción no válida.")

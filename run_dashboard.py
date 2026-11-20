@@ -64,7 +64,7 @@ def wait_for_api(api_process):
         if api_process.poll() is not None:
             raise RuntimeError("La API terminó antes de quedar disponible.")
         try:
-            with urlopen(API_HEALTH_URL, timeout=1) as response:
+            with urlopen(API_HEALTH_URL, timeout=30) as response:
                 if response.status == 200:
                     return
         except HTTPError as error:

@@ -1,0 +1,52 @@
+artifact_path: dbfs:/databricks/mlflow-tracking/2142475701230521/logged_models/m-77a1ae341113463893b2a2825f2fa2af/artifacts
+databricks_runtime: client.6
+flavors:
+  python_function:
+    data: model.ubj
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.xgboost
+    python_version: 3.12.3
+  xgboost:
+    code: null
+    data: model.ubj
+    model_class: xgboost.sklearn.XGBRegressor
+    model_format: ubj
+    xgb_version: 3.4.1
+is_signature_from_type_hint: false
+mlflow_version: 3.12.0
+model_id: m-77a1ae341113463893b2a2825f2fa2af
+model_size_bytes: 318082
+model_uuid: m-77a1ae341113463893b2a2825f2fa2af
+prompts: null
+run_id: 74671f4257204186b28945f22e802ccb
+saved_input_example_info:
+  artifact_path: input_example.json
+  pandas_orient: split
+  serving_input_path: serving_input_example.json
+  type: dataframe
+signature:
+  inputs: '[{"type": "double", "name": "estrato_predominante", "required": true},
+    {"type": "double", "name": "v_ref_2025", "required": true}, {"type": "double",
+    "name": "cagr_15_25", "required": true}, {"type": "long", "name": "num_estaciones_transmilenio",
+    "required": true}, {"type": "double", "name": "densidad_airbnb_km2", "required":
+    true}, {"type": "long", "name": "localidad_BARRIOS UNIDOS", "required": true},
+    {"type": "long", "name": "localidad_BOSA", "required": true}, {"type": "long",
+    "name": "localidad_CANDELARIA", "required": true}, {"type": "long", "name": "localidad_CHAPINERO",
+    "required": true}, {"type": "long", "name": "localidad_CIUDAD BOLIVAR", "required":
+    true}, {"type": "long", "name": "localidad_ENGATIVA", "required": true}, {"type":
+    "long", "name": "localidad_FONTIBON", "required": true}, {"type": "long", "name":
+    "localidad_KENNEDY", "required": true}, {"type": "long", "name": "localidad_LOS
+    MARTIRES", "required": true}, {"type": "long", "name": "localidad_PUENTE ARANDA",
+    "required": true}, {"type": "long", "name": "localidad_RAFAEL URIBE URIBE", "required":
+    true}, {"type": "long", "name": "localidad_SAN CRISTOBAL", "required": true},
+    {"type": "long", "name": "localidad_SANTA FE", "required": true}, {"type": "long",
+    "name": "localidad_SUBA", "required": true}, {"type": "long", "name": "localidad_TEUSAQUILLO",
+    "required": true}, {"type": "long", "name": "localidad_TUNJUELITO", "required":
+    true}, {"type": "long", "name": "localidad_USAQUEN", "required": true}, {"type":
+    "long", "name": "localidad_USME", "required": true}]'
+  outputs: '[{"type": "float", "required": true}]'
+  params: null
+type_hint_from_example: false
+utc_time_created: '2026-11-06 11:56:53.818044'

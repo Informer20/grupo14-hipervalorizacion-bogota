@@ -218,7 +218,3 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
-
-# Exported MLflow model bundles are local deployment artifacts.
-api/models/*
-!api/models/.gitkeep
