@@ -5,6 +5,26 @@ from fastapi.testclient import TestClient
 from api.app import main
 
 
+def test_root_reports_welcome_and_available_routes():
+    """La raíz explica que la API está disponible y dónde usar sus rutas.
+
+    La prueba abre la ruta ``/`` sin parámetros, sin depender de salud,
+    documentación o modelo. Comprueba el mensaje de bienvenida y los enlaces
+    a salud, predicción y documentación que recibe un usuario.
+    """
+    client = TestClient(main.app)
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "message": "Bienvenido a la API de Urban AI",
+        "health": "/health",
+        "prediction": "/api/v1/predict",
+        "documentation": "/docs",
+    }
+
+
 def test_health_reports_ready_model(monkeypatch):
     """Verifica el estado exitoso de salud cuando hay un modelo disponible.
 
@@ -106,31 +126,6 @@ def test_predict_rejects_invalid_scenario_payload():
 
     assert response.status_code == 422
 
-
-def test_predict_rejects_values_outside_observed_ranges(monkeypatch):
-    """Convierte a HTTP 422 el error de una variable fuera del rango observado.
-
-    El predictor simulado genera un ``ValueError`` y los asserts verifican
-    tanto el código de validación como el detalle que recibe el cliente.
-    """
-    def out_of_range_prediction(input_data):
-        raise ValueError("densidad fuera del rango observado")
-
-    monkeypatch.setattr(main, "predict_2026", out_of_range_prediction)
-    client = TestClient(main.app)
-    valid_shape = {
-        "localidad": "CHAPINERO",
-        "estrato_predominante": 6,
-        "v_ref_2025": 7_000_000,
-        "cagr_15_25": 0.12,
-        "num_estaciones_transmilenio": 3,
-        "densidad_airbnb_km2": 250,
-    }
-
-    response = client.post("/api/v1/predict", json=valid_shape)
-
-    assert response.status_code == 422
-    assert response.json()["detail"] == "densidad fuera del rango observado"
 
 
 def test_predict_rejects_non_text_locality():

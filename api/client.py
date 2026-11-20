@@ -39,6 +39,8 @@ def predict_neighborhood(record, new_listings):
             record["num_estaciones_transmilenio"]
         ),
         "densidad_airbnb_km2": total_listings / area,
+        "area_km2": area,
+        "num_listings_airbnb": int(record["num_listings_airbnb"]),
     }
     endpoint = os.getenv(
         "URBAN_AI_API_URL",

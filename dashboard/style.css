@@ -64,7 +64,7 @@
     }
 
     .center-panel > .map-card {
-        flex: 1;
+        flex: 0 0 auto;
     }
 
     .right-panel > .indicators-card {
@@ -96,6 +96,13 @@
         font-size: 15px;
         line-height: 1.2;
         overflow-wrap: anywhere;
+    }
+
+    .indicator-location {
+        color: #dbeafe;
+        font-size: 16px;
+        font-weight: 700;
+        margin-bottom: 10px;
     }
 
     .chart-card .card-body {
@@ -147,10 +154,16 @@
     }
 
     .prediction-status {
+        background-color: #10251e;
+        border: 1px solid #22c55e;
+        border-radius: 8px;
         color: #86efac;
-        font-size: 11px;
-        line-height: 1.35;
-        margin: 8px 0 0;
+        font-size: 13px;
+        font-weight: 700;
+        line-height: 1.45;
+        margin: 10px 0 0;
+        padding: 12px;
+        text-align: center;
     }
 
     .prediction-status:empty {
@@ -211,6 +224,55 @@
         background-color: #292311;
         border-color: #eab308;
         color: #fde047;
+    }
+
+    .risk-range-row {
+        display: flex;
+        justify-content: stretch;
+        gap: 8px;
+        margin-top: 8px;
+        width: 100%;
+    }
+
+    .risk-range {
+        display: flex;
+        flex: 1 1 0;
+        min-width: 0;
+        flex-direction: column;
+        justify-content: center;
+        border-radius: 8px;
+        padding: 8px;
+        text-align: center;
+    }
+
+    .risk-range.green {
+        background-color: #10251e;
+        border: 1px solid #22c55e;
+        color: #86efac;
+    }
+
+    .risk-range.yellow {
+        background-color: #292311;
+        border: 1px solid #eab308;
+        color: #fde047;
+    }
+
+    .risk-range.red {
+        background-color: #2a171a;
+        border: 1px solid #ef4444;
+        color: #fca5a5;
+    }
+
+    .risk-range-label {
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+
+    .risk-range-boundary {
+        font-size: 10px;
+        line-height: 1.2;
+        margin-top: 2px;
     }
 
     .risk-alert.red,

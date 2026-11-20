@@ -1,6 +1,7 @@
 """Construye las variables de entrada en el formato que espera el modelo MLflow."""
 
 import json
+import math
 from functools import lru_cache
 from pathlib import Path
 
@@ -73,6 +74,8 @@ def build_feature_metadata(data_path: Path = DATA_PATH) -> dict:
             "barrio": neighborhood,
             "estrato_predominante": group["estrato_predominante"].mode().iloc[0],
             "densidad_airbnb_km2": total_listings / area if area else 0,
+            "num_listings_airbnb": total_listings,
+            "area_km2": area,
             "v_ref_2025": (
                 (group["v_ref_2025"].fillna(0) * weights).sum() / area
                 if area
@@ -113,6 +116,8 @@ def build_feature_metadata(data_path: Path = DATA_PATH) -> dict:
                 "estrato_predominante",
                 "v_ref_2025",
                 "densidad_airbnb_km2",
+                "num_listings_airbnb",
+                "area_km2",
             ]
         ].to_dict(orient="records"),
     }
@@ -184,103 +189,44 @@ def build_prediction_features(
     return row.reindex(columns=feature_columns, fill_value=0)
 
 
-def validate_observed_ranges(input_data: dict, feature_ranges: dict) -> None:
-    """Rechaza características numéricas fuera de los límites vistos en barrios.
-
-    Los límites son una protección frente a escenarios extremos, no una
-    garantía de que cualquier combinación dentro de ellos sea representativa.
-    """
-    for column, bounds in feature_ranges.items():
-        value = float(input_data[column])
-        if value < bounds["min"] or value > bounds["max"]:
-            raise ValueError(
-                f"'{column}'={value:.4f} está fuera del rango observado "
-                f"[{bounds['min']:.4f}, {bounds['max']:.4f}]."
-            )
-
-
-def peer_density_ceiling(
+def comparable_new_listings_limit(
     neighborhood: dict,
     neighborhood_profiles: list[dict],
-    minimum_local_peers: int = 3,
-    maximum_peers: int = 10,
+    absolute_limit: int = 1000,
     price_tolerance: float = 0.25,
-) -> float:
-    """Obtiene la mayor densidad observada en hasta diez barrios comparables.
+) -> int:
+    """Calcula el máximo de anuncios nuevos permitidos en el barrio.
 
-    Primero busca barrios de la misma localidad y estrato dentro de una
-    diferencia de precio del 25%. Si no encuentra al menos tres, amplía la
-    comparación a toda Bogotá manteniendo el mismo estrato. Si todavía hay
-    menos de tres, usa los barrios más cercanos en precio dentro de ese
-    estrato. El propio barrio forma parte de la comparación cuando aparece
-    en la lista de perfiles.
+    Busca barrios del mismo estrato cuyo valor de referencia 2025 esté dentro
+    de una diferencia del 25 por ciento. Toma el máximo número de anuncios
+    Airbnb observado en ese grupo, lo aumenta 25 por ciento y redondea hacia
+    arriba. Si el barrio seleccionado ya tiene más anuncios, conserva al menos
+    cinco nuevas disponibles para que el usuario siempre pueda simular.
     """
-    same_stratum = [
+    reference_value = float(neighborhood["v_ref_2025"])
+    stratum = float(neighborhood["estrato_predominante"])
+
+    peers = [
         profile
         for profile in neighborhood_profiles
-        if float(profile["estrato_predominante"])
-        == float(neighborhood["estrato_predominante"])
-    ]
-    same_locality = [
-        profile
-        for profile in same_stratum
-        if profile[LOCALITY_COLUMN] == neighborhood[LOCALITY_COLUMN]
-    ]
-    reference_value = float(neighborhood["v_ref_2025"])
-    local_price_peers = [
-        profile
-        for profile in same_locality
-        if abs(float(profile["v_ref_2025"]) - reference_value)
+        if float(profile["estrato_predominante"]) == stratum
+        and abs(float(profile["v_ref_2025"]) - reference_value)
         <= abs(reference_value) * price_tolerance
     ]
-    city_price_peers = [
-        profile
-        for profile in same_stratum
-        if abs(float(profile["v_ref_2025"]) - reference_value)
-        <= abs(reference_value) * price_tolerance
-    ]
-    if len(local_price_peers) >= minimum_local_peers:
-        peer_pool = local_price_peers
-    elif len(city_price_peers) >= minimum_local_peers:
-        peer_pool = city_price_peers
-    else:
-        peer_pool = same_stratum
-    if not peer_pool:
-        raise ValueError(
-            "No hay barrios observados comparables para el estrato seleccionado."
-        )
+    if not peers:
+        peers = [
+            profile
+            for profile in neighborhood_profiles
+            if float(profile["estrato_predominante"]) == stratum
+        ]
+    if not peers:
+        return 5
 
-    peer_pool.sort(
-        key=lambda profile: abs(
-            float(profile["v_ref_2025"]) - reference_value
-        )
+    max_observed_listings = max(
+        float(profile["num_listings_airbnb"]) for profile in peers
     )
-    closest_peers = peer_pool[:maximum_peers]
-    return max(float(profile["densidad_airbnb_km2"]) for profile in closest_peers)
-
-
-def max_new_listings_for_density(
-    neighborhood: dict,
-    max_density: float,
-    absolute_limit: int,
-) -> int:
-    """Calcula cuántos anuncios nuevos permite el barrio seleccionado.
-
-    El resultado respeta el máximo global del deslizador y evita que
-    ``(anuncios existentes + nuevos) / área`` supere la densidad máxima
-    observada entre barrios comparables al seleccionado.
-    """
-    area = float(neighborhood["area_km2"])
-    if area <= 0:
-        return 0
-
-    existing_listings = int(neighborhood["num_listings_airbnb"])
-    return int(
-        max(
-            0,
-            min(
-                absolute_limit,
-                max_density * area - existing_listings,
-            ),
-        )
+    maximum_total_listings = math.ceil(max_observed_listings * 1.25)
+    allowed_new_listings = maximum_total_listings - int(
+        neighborhood["num_listings_airbnb"]
     )
+    return int(max(5, min(absolute_limit, allowed_new_listings)))

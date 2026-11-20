@@ -48,6 +48,17 @@ class PredictionRequest(BaseModel):
         allow_inf_nan=False,
         description="Anuncios existentes y nuevos divididos por el área en km².",
     )
+    area_km2: float = Field(
+        default=None,
+        gt=0,
+        allow_inf_nan=False,
+        description="Área del barrio utilizada para calcular la densidad.",
+    )
+    num_listings_airbnb: int = Field(
+        default=None,
+        ge=0,
+        description="Anuncios Airbnb existentes antes de agregar el escenario.",
+    )
 
 
 class PredictionResponse(BaseModel):

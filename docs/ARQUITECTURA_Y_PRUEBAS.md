@@ -41,7 +41,7 @@ La API aplica tres niveles de validación:
 
 1. **Formato y reglas generales**, en Pydantic: tipos, valores finitos, estrato entre 0 y 6, referencias positivas, conteos y densidad no negativos, y rechazo de campos inesperados.
 2. **Rangos generales observados**, en `predictor.py`: compara las variables numéricas con los mínimos y máximos de los barrios agregados desde el GeoPackage.
-3. **Densidad entre barrios comparables**, en `features.py` y `predictor.py`: compara localidad, estrato y valor 2025 con perfiles observados. El máximo dinámico del deslizador usa la misma regla. Si la densidad simulada supera cualquiera de los límites, la API no llama al modelo y responde con un error `422`.
+3. **Densidad entre barrios comparables**, en `features.py` y `predictor.py`: compara el estrato y el valor 2025 con perfiles observados. El máximo dinámico del deslizador busca todos los barrios del mismo estrato cuyo valor 2025 esté dentro de ±25 %, toma el mayor número de anuncios observados, lo multiplica por 1.25 y redondea hacia arriba. Si el resultado es menor que el escenario actual, conserva al menos cinco unidades nuevas. El deslizador avanza de uno en uno y no supera 1000. Si el escenario supera el máximo dinámico, la API no llama al modelo y responde con un error `422`.
 
 Estos límites reducen escenarios alejados de los datos observados, pero no garantizan que todas las combinaciones permitidas sean representativas o causalmente válidas. Hay además una diferencia de nivel que debe resolverse en la etapa de evaluación: el notebook registra el XGBoost entrenado con filas de sectores catastrales, mientras que el dashboard agrega las entradas por barrio. Los filtros de rangos no demuestran que un modelo entrenado por sector generalice bien a entradas agregadas por barrio. Hay que confirmar la unidad de análisis con el tutor y con el artefacto MLflow antes de presentar la simulación como validada.
 
@@ -72,12 +72,10 @@ Las pruebas de endpoint aíslan la predicción usando `monkeypatch`; no comprueb
 
 - `test_prediction_features_match_the_mlflow_input_schema`: utiliza una localidad conocida y comprueba que la fila tenga los nombres y orden de columnas que espera el modelo.
 - `test_prediction_features_reject_unknown_locality`: rechaza localidades que no aparecen en las categorías conocidas.
-- `test_prediction_rejects_density_outside_observed_range`: comprueba que no se pase al modelo una densidad fuera del rango observado.
 - `test_feature_values_are_numeric_before_calling_mlflow`: comprueba que las variables preparadas sean numéricas.
 - `test_feature_metadata_uses_barrio_level_ranges`: verifica que los límites de escenario se calculen en el mismo nivel de barrio que usa el dashboard.
 - `test_slider_limit_accounts_for_existing_listings_and_area`: comprueba el límite calculado de nuevos anuncios al tener en cuenta el área, los anuncios actuales y el tope global.
-- `test_peer_density_ceiling_uses_stratum_and_similar_reference_values`: comprueba que los barrios de otro estrato o con valores de referencia lejanos no aumenten el límite, y que se amplíe a Bogotá si hay pocos pares locales.
-- `test_peer_density_ceiling_prefers_local_comparable_neighborhoods`: verifica que se use el grupo local cuando hay suficientes barrios del mismo estrato y valor cercano.
+- `test_comparable_new_listings_limit_always_allows_five_and_rounds_up`: comprueba que el máximo de anuncios nuevos se derive de barrios comparables, redondee hacia arriba y conserve al menos cinco nuevos.
 
 La prueba de localidad no intenta demostrar el funcionamiento interno de `drop_first`; verifica que una solicitud conocida produzca la forma de fila que necesita el modelo. La prueba de localidad desconocida comprueba que una entrada que el modelo no vio se rechace explícitamente.
 
