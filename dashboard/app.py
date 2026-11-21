@@ -54,28 +54,30 @@ app.title = "Análisis territorial | Bogotá"
 
 
 def create_empty_chart():
-    """Crea la gráfica vacía con el tema oscuro y las unidades del tablero."""
+    """Crea un estado inicial útil para el gráfico, con el tema oscuro."""
     figure = go.Figure()
     figure.update_layout(
         template="plotly_dark",
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font={"color": COLORS["text"]},
-        margin={"l": 48, "r": 8, "t": 22, "b": 24},
+        margin={"l": 12, "r": 12, "t": 12, "b": 12},
         autosize=True,
         showlegend=False,
-        yaxis={
-            "title": {
-                "text": "Millones de pesos/m²",
-                "font": {"size": 9},
-                "standoff": 2,
-            },
-            "tickfont": {"size": 8},
-            "tickformat": ".1f",
-            "gridcolor": "#253449",
-            "rangemode": "tozero",
-        },
-        xaxis={"tickfont": {"size": 9}},
+        xaxis={"visible": False},
+        yaxis={"visible": False},
+        annotations=[
+            {
+                "text": "Ejecuta una predicción para consultar el valor estimado de 2026.",
+                "xref": "paper",
+                "yref": "paper",
+                "x": 0.5,
+                "y": 0.5,
+                "showarrow": False,
+                "align": "center",
+                "font": {"size": 12, "color": COLORS["muted"]},
+            }
+        ],
     )
     return figure
 
@@ -182,7 +184,7 @@ def create_price_chart(record, predicted_value=None):
         values.append(predicted_value / 1_000_000)
         colors.append("#f59e0b")
 
-    figure = create_empty_chart()
+    figure = go.Figure()
     figure.add_trace(
         go.Bar(
             x=labels,
@@ -194,7 +196,35 @@ def create_price_chart(record, predicted_value=None):
             hovertemplate="%{x}<br>$ %{y:.2f} millones/m²<extra></extra>",
         )
     )
-    figure.update_layout(yaxis={"range": [0, max(values) * 1.3]})
+    figure.update_layout(
+        template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font={"color": COLORS["text"]},
+        margin={"l": 48, "r": 8, "t": 22, "b": 24},
+        autosize=True,
+        showlegend=False,
+        xaxis={
+            "visible": True,
+            "tickfont": {"size": 9},
+            "showgrid": False,
+            "zeroline": False,
+        },
+        yaxis={
+            "visible": True,
+            "title": {
+                "text": "Millones de pesos/m²",
+                "font": {"size": 9},
+                "standoff": 2,
+            },
+            "tickfont": {"size": 8},
+            "tickformat": ".1f",
+            "showgrid": False,
+            "zeroline": False,
+            "rangemode": "tozero",
+            "range": [0, max(values) * 1.3],
+        },
+    )
     return figure
 
 
@@ -448,14 +478,33 @@ chart_card = dbc.Card(
                 "Comparación de valores de referencia de 2025 y 2026.",
                 className="section-description",
             ),
-            dcc.Graph(
-                id="price-chart",
-                figure=create_empty_chart(),
-                config={"displayModeBar": False},
-                style={"height": "100%", "flex": "1 1 auto", "minHeight": 0},
+            html.Div(
+                [
+                    dcc.Graph(
+                        id="price-chart",
+                        figure=create_empty_chart(),
+                        config={"displayModeBar": False},
+                        style={
+                            "height": "100%",
+                            "flex": "1 1 auto",
+                            "minHeight": 0,
+                        },
+                    ),
+                    html.Div(
+                        [
+                            dbc.Spinner(size="sm", color="info"),
+                            html.Span("Calculando valor estimado…"),
+                        ],
+                        id="prediction-chart-loading",
+                        className="chart-loading-overlay",
+                        style={"display": "none"},
+                        role="status",
+                    ),
+                ],
+                className="chart-plot-wrap",
             ),
             html.P(
-                "Valores de referencia disponibles en la matriz; no son predicciones.",
+                "2025: valor observado · 2026: estimación del modelo según el escenario.",
                 className="prototype-note",
             ),
         ]
@@ -728,6 +777,11 @@ def update_dashboard(
             {"display": "flex"},
             {"display": "none"},
         ),
+        (
+            Output("prediction-chart-loading", "style"),
+            {"display": "flex"},
+            {"display": "none"},
+        ),
     ],
 )
 def run_prediction(
@@ -782,15 +836,14 @@ def run_prediction(
     Output("prediction-status", "children", allow_duplicate=True),
     Output("diagnosis-text", "children", allow_duplicate=True),
     Output("territory-details", "children", allow_duplicate=True),
-    Output("price-chart", "figure", allow_duplicate=True),
     Input("run-prediction", "n_clicks"),
     prevent_initial_call=True,
 )
 def clear_prediction_results(n_clicks):
     """Vacía los resultados anteriores al iniciar una nueva predicción."""
     if not n_clicks:
-        return no_update, no_update, no_update, no_update, no_update, no_update
-    return "Calculando predicción...", "risk-alert", "", "", [], create_empty_chart()
+        return no_update, no_update, no_update, no_update, no_update
+    return "Calculando predicción...", "risk-alert", "", "", []
 
 
 if __name__ == "__main__":
