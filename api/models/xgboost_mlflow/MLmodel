@@ -1,4 +1,4 @@
-artifact_path: dbfs:/databricks/mlflow-tracking/2142475701230521/logged_models/m-77a1ae341113463893b2a2825f2fa2af/artifacts
+artifact_path: dbfs:/databricks/mlflow-tracking/2575234912128712/logged_models/m-4e9cb3e86acb48ddb5e9e3eca93f7a2d/artifacts
 databricks_runtime: client.6
 flavors:
   python_function:
@@ -16,11 +16,11 @@ flavors:
     xgb_version: 3.4.1
 is_signature_from_type_hint: false
 mlflow_version: 3.12.0
-model_id: m-77a1ae341113463893b2a2825f2fa2af
-model_size_bytes: 318082
-model_uuid: m-77a1ae341113463893b2a2825f2fa2af
+model_id: m-4e9cb3e86acb48ddb5e9e3eca93f7a2d
+model_size_bytes: 335072
+model_uuid: m-4e9cb3e86acb48ddb5e9e3eca93f7a2d
 prompts: null
-run_id: 74671f4257204186b28945f22e802ccb
+run_id: 7b89562ac13b46068e7d9bbae7ea3114
 saved_input_example_info:
   artifact_path: input_example.json
   pandas_orient: split
@@ -49,4 +49,4 @@ signature:
   outputs: '[{"type": "float", "required": true}]'
   params: null
 type_hint_from_example: false
-utc_time_created: '2026-11-06 11:56:53.818044'
+utc_time_created: '2026-11-21 04:42:06.899194'
