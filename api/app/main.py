@@ -17,6 +17,17 @@ app = FastAPI(
 )
 
 
+@app.get("/")
+def welcome() -> dict:
+    """Presenta la API y las direcciones principales al abrir su raíz."""
+    return {
+        "message": "Bienvenido a la API de Urban AI",
+        "health": "/health",
+        "prediction": "/api/v1/predict",
+        "documentation": "/docs",
+    }
+
+
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     """Comprueba que se puede cargar el modelo y devuelve su identificador.
@@ -40,7 +51,7 @@ def predict(input_data: PredictionRequest) -> PredictionResponse:
     observado, y 503 si el modelo no está disponible o no coincide con la API.
     """
     try:
-        prediction = predict_2026(input_data.model_dump())
+        prediction = predict_2026(input_data.model_dump(exclude_none=True))
     except (FileNotFoundError, ModelConfigurationError) as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     except ValueError as error:

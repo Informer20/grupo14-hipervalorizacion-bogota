@@ -4,7 +4,7 @@ import numpy as np
 
 
 def observed_growth_thresholds(geodata):
-    """Calcula umbrales iniciales con los percentiles 33 y 67 del CAGR.
+    """Calcula umbrales iniciales con los percentiles 33, 67 y 75 del CAGR.
 
     El crecimiento histórico por barrio se pondera por área. Los percentiles
     dividen los barrios observados en tres grupos de referencia; no son
@@ -25,8 +25,15 @@ def observed_growth_thresholds(geodata):
 
     if not growth_rates:
         raise ValueError("No hay valores de crecimiento observado para el semáforo.")
-    green_limit, yellow_limit = np.quantile(growth_rates, [1 / 3, 2 / 3])
-    return round(float(green_limit), 1), round(float(yellow_limit), 1)
+    green_limit, yellow_limit, red_start = np.quantile(
+        growth_rates,
+        [1 / 3, 2 / 3, 3 / 4],
+    )
+    return (
+        round(float(green_limit), 1),
+        round(float(yellow_limit), 1),
+        round(float(red_start), 1),
+    )
 
 
 def calculate_growth_percent(predicted_value, observed_value):
@@ -37,7 +44,7 @@ def calculate_growth_percent(predicted_value, observed_value):
     return (float(predicted_value) / observed_value - 1) * 100
 
 
-def classify_risk(predicted_growth_percent, green_limit, yellow_limit):
+def classify_risk(predicted_growth_percent, green_limit, yellow_limit, red_start):
     """Clasifica el crecimiento de 2026 estimado frente al valor de 2025.
 
     Verde comprende valores hasta el primer umbral; amarillo, valores mayores
@@ -47,37 +54,41 @@ def classify_risk(predicted_growth_percent, green_limit, yellow_limit):
     try:
         green_limit = float(green_limit)
         yellow_limit = float(yellow_limit)
+        red_start = float(red_start)
     except (TypeError, ValueError):
         green_limit = yellow_limit = float("nan")
+        red_start = float("nan")
 
     thresholds_valid = (
         np.isfinite(green_limit)
         and np.isfinite(yellow_limit)
+        and np.isfinite(red_start)
         and green_limit < yellow_limit
+        and red_start >= yellow_limit
     )
     if not thresholds_valid:
         return (
-            "Configura los umbrales en orden: verde menor que amarillo.",
+            "Revisa los valores: el umbral verde debe ser menor que el amarillo.",
             "risk-alert invalid",
             "sin clasificar",
         )
     if predicted_growth_percent <= green_limit:
         return (
-            f"El crecimiento predicho de {predicted_growth_percent:.2f}% "
-            "frente a 2025 se ubica en zona verde.",
+            f"El valor de riesgo detectado es {predicted_growth_percent:.2f}%. "
+            "No se emite alerta.",
             "risk-alert green",
             "verde",
         )
-    if predicted_growth_percent <= yellow_limit:
+    if predicted_growth_percent > red_start:
         return (
-            f"El crecimiento predicho de {predicted_growth_percent:.2f}% "
-            "frente a 2025 se ubica en zona amarilla.",
-            "risk-alert yellow",
-            "amarilla",
+            f"El valor de riesgo detectado es {predicted_growth_percent:.2f}%. "
+            "Se emite una alerta roja.",
+            "risk-alert red",
+            "roja",
         )
     return (
-        f"El crecimiento predicho de {predicted_growth_percent:.2f}% "
-        "frente a 2025 se ubica en zona roja.",
-        "risk-alert red",
-        "roja",
+        f"El valor de riesgo detectado es {predicted_growth_percent:.2f}%. "
+        "Se emite una alerta amarilla.",
+        "risk-alert yellow",
+        "amarilla",
     )

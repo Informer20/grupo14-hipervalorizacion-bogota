@@ -14,8 +14,6 @@ from api.model.config import (
 from api.model.features import (
     build_feature_metadata,
     build_prediction_features,
-    peer_density_ceiling,
-    validate_observed_ranges,
 )
 
 
@@ -40,7 +38,12 @@ def load_model_bundle() -> tuple[object, dict]:
             )
         with manifest_path.open(encoding="utf-8") as file:
             metadata = json.load(file)
-        if "neighborhood_profiles" not in metadata:
+        if (
+            "neighborhood_profiles" not in metadata
+            or not metadata["neighborhood_profiles"]
+            or "num_listings_airbnb"
+            not in metadata["neighborhood_profiles"][0]
+        ):
             metadata["neighborhood_profiles"] = build_feature_metadata()[
                 "neighborhood_profiles"
             ]
@@ -64,17 +67,6 @@ def load_model_bundle() -> tuple[object, dict]:
 def predict_2026(input_data: dict) -> float:
     """Comprueba rangos, ordena las variables y pide al modelo el valor 2026."""
     model, metadata = load_model_bundle()
-    validate_observed_ranges(input_data, metadata["feature_ranges"])
-    max_peer_density = peer_density_ceiling(
-        input_data,
-        metadata["neighborhood_profiles"],
-    )
-    if input_data["densidad_airbnb_km2"] > max_peer_density:
-        raise ValueError(
-            "La densidad Airbnb supera el máximo observado entre barrios "
-            f"comparables para el estrato {input_data['estrato_predominante']}: "
-            f"{max_peer_density:.4f} propiedades/km²."
-        )
     features = build_prediction_features(
         input_data,
         metadata["feature_columns"],

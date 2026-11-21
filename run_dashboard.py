@@ -38,7 +38,7 @@ def select_python():
     if sys.prefix != sys.base_prefix:
         return Path(sys.executable)
 
-    for environment_name in ("env-dvc", ".venv"):
+    for environment_name in (".venv", "env-dvc"):
         candidate = environment_python(PROJECT_ROOT / environment_name)
         if candidate.is_file():
             return candidate

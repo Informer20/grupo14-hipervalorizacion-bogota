@@ -6,7 +6,7 @@ Tablero interactivo para explorar anuncios Airbnb, características urbanas y va
 
 La aplicación Dash obtiene la información territorial y la geometría del GeoPackage local. Al presionar **Ejecutar predicción**, el dashboard consulta una API FastAPI que carga el modelo XGBoost guardado como artefacto en MLflow. El servicio no entrena el modelo al iniciar: utiliza un paquete previamente exportado o, si se configura, carga la URI de MLflow en tiempo de ejecución.
 
-Para estimar la densidad del escenario, se suman los anuncios Airbnb existentes y los nuevos alojamientos indicados en el deslizador y se divide ese total por el área del barrio. El máximo del deslizador se calcula con barrios comparables: primero busca el mismo estrato y localidad, con valores de referencia de 2025 cercanos; si hay pocos, amplía la comparación a toda Bogotá manteniendo el estrato. La API aplica la misma restricción aunque reciba una solicitud directa. Es una protección frente a escenarios poco representados, no una prueba de que el modelo se haya validado para esa unidad de análisis: el notebook entrena con sectores y el dashboard predice con agregados de barrio.
+Para estimar la densidad del escenario, se suman los anuncios Airbnb existentes y los nuevos alojamientos indicados en el deslizador y se divide ese total por el área del barrio. Al seleccionar un barrio, el máximo del deslizador busca barrios de Bogotá con el mismo estrato y un valor de referencia 2025 dentro de un margen de 25 %. Toma el mayor número de anuncios observado entre esos barrios comparables, lo aumenta 25 % y redondea hacia arriba. El resultado garantiza al menos cinco alojamientos nuevos y nunca supera el máximo general de 1000. El deslizador avanza de uno en uno. Esta protección reduce escenarios alejados de los datos observados, pero no demuestra que el modelo se haya validado para una unidad agregada de barrio.
 
 El semáforo clasifica el crecimiento predicho para 2026 frente al valor observado de 2025. Sus umbrales iniciales son los percentiles 33 y 67 del CAGR histórico agregado por barrio; el usuario puede modificarlos. Son bandas descriptivas de crecimiento, no probabilidades de riesgo producidas por XGBoost.
 
@@ -27,6 +27,7 @@ El semáforo clasifica el crecimiento predicho para 2026 frente al valor observa
 - `notebooks/`: análisis y experimentos de modelos.
 - `tests/`: pruebas de API, preparación de variables y cliente HTTP.
 - `docs/ARQUITECTURA_Y_PRUEBAS.md`: explicación general de archivos y pruebas.
+- `docs/GUIA_USUARIO_DASHBOARD.md`: instrucciones para usar el dashboard e interpretar sus métricas.
 - `docs/MLFLOW.md`: guía para encontrar y descargar el modelo desde Databricks.
 - `Dockerfile` y `.dockerignore`: construcción de una imagen para prueba o despliegue.
 
@@ -54,6 +55,8 @@ Direcciones locales:
 - Dashboard: `http://127.0.0.1:8050`
 - Salud de la API: `http://127.0.0.1:8001/health`
 - Documentación interactiva de la API: `http://127.0.0.1:8001/docs`
+
+Para instrucciones de uso e interpretación de resultados, consulta la [guía de usuario del dashboard](./docs/GUIA_USUARIO_DASHBOARD.md).
 
 ## Pruebas
 

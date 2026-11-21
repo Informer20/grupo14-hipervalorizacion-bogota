@@ -5,9 +5,7 @@ import pytest
 
 from api.model.features import (
     build_prediction_features,
-    max_new_listings_for_density,
-    peer_density_ceiling,
-    validate_observed_ranges,
+    comparable_new_listings_limit,
 )
 
 
@@ -72,32 +70,6 @@ def test_prediction_features_reject_unknown_locality():
         )
 
 
-def test_prediction_rejects_density_outside_observed_range():
-    """Impide predecir una densidad mayor a la observada en los barrios.
-
-    Se entrega un máximo de 250 y una solicitud con 251 propiedades/km²;
-    el error debe identificar la variable que excedió el límite.
-    """
-    input_data = {
-        "localidad": "CHAPINERO",
-        "estrato_predominante": 6,
-        "v_ref_2025": 7_000_000,
-        "cagr_15_25": 0.12,
-        "num_estaciones_transmilenio": 3,
-        "densidad_airbnb_km2": 251,
-    }
-    observed_ranges = {
-        "estrato_predominante": {"min": 1, "max": 6},
-        "v_ref_2025": {"min": 500_000, "max": 8_000_000},
-        "cagr_15_25": {"min": -0.1, "max": 0.5},
-        "num_estaciones_transmilenio": {"min": 0, "max": 10},
-        "densidad_airbnb_km2": {"min": 0, "max": 250},
-    }
-
-    with pytest.raises(ValueError, match="densidad_airbnb_km2.*fuera del rango"):
-        validate_observed_ranges(input_data, observed_ranges)
-
-
 def test_feature_values_are_numeric_before_calling_mlflow():
     """Comprueba que la fila preparada no conserva columnas de texto.
 
@@ -140,113 +112,33 @@ def test_feature_metadata_uses_barrio_level_ranges():
     )
 
 
-def test_slider_limit_accounts_for_existing_listings_and_area():
-    """Limita los anuncios nuevos usando área, anuncios actuales y tope global.
+def test_comparable_new_listings_limit_always_allows_five_and_rounds_up():
+    """Calcula un máximo total basado en barrios similares y redondea hacia arriba.
 
-    Para un barrio de 2 km² con 100 anuncios, una densidad máxima de 60
-    permite 20 anuncios más; una densidad de 40 no permite añadir ninguno.
-    El último caso comprueba que también se respeta el máximo general 50.
+    Si el máximo observado en el grupo comparable es 40, el 25 por ciento de
+    expansión permite como máximo 50 alojamientos totales. Para un barrio que
+    ya tiene 45, quedarían 5 nuevos. Si ya tiene 51, conserva al menos 5
+    nuevos para que el deslizador nunca se bloquee completamente.
     """
-    neighborhood = {
-        "area_km2": 2,
-        "num_listings_airbnb": 100,
-    }
-
-    assert max_new_listings_for_density(neighborhood, 60, 1000) == 20
-    assert max_new_listings_for_density(neighborhood, 40, 1000) == 0
-    assert max_new_listings_for_density(neighborhood, 1000, 50) == 50
-
-
-def test_peer_density_ceiling_uses_stratum_and_similar_reference_values():
-    """Limita la densidad a barrios con estrato y precios de referencia similares.
-
-    Hay dos barrios comparables cercanos en la misma localidad y uno cercano
-    en otra localidad, por lo que se amplía al grupo de la ciudad del mismo
-    estrato. Los perfiles de precio muy distinto y de otro estrato no pueden
-    subir el máximo permitido.
-    """
-    selected = {
-        "localidad": "LOCALIDAD A",
-        "estrato_predominante": 1,
-        "v_ref_2025": 100,
-    }
     profiles = [
         {
-            "localidad": "LOCALIDAD A",
-            "barrio": "BARRIO SELECCIONADO",
-            "estrato_predominante": 1,
+            "estrato_predominante": 3,
             "v_ref_2025": 100,
-            "densidad_airbnb_km2": 5,
+            "num_listings_airbnb": 40,
         },
         {
-            "localidad": "LOCALIDAD A",
-            "barrio": "BARRIO CERCANO",
-            "estrato_predominante": 1,
+            "estrato_predominante": 3,
             "v_ref_2025": 110,
-            "densidad_airbnb_km2": 8,
-        },
-        {
-            "localidad": "LOCALIDAD B",
-            "barrio": "BARRIO SIMILAR",
-            "estrato_predominante": 1,
-            "v_ref_2025": 105,
-            "densidad_airbnb_km2": 10,
-        },
-        {
-            "localidad": "LOCALIDAD B",
-            "barrio": "BARRIO DE OTRO PRECIO",
-            "estrato_predominante": 1,
-            "v_ref_2025": 500,
-            "densidad_airbnb_km2": 1000,
-        },
-        {
-            "localidad": "LOCALIDAD A",
-            "barrio": "BARRIO DE OTRO ESTRATO",
-            "estrato_predominante": 6,
-            "v_ref_2025": 100,
-            "densidad_airbnb_km2": 5000,
+            "num_listings_airbnb": 30,
         },
     ]
 
-    assert peer_density_ceiling(selected, profiles) == 10
-
-
-def test_peer_density_ceiling_prefers_local_comparable_neighborhoods():
-    """Prioriza los barrios comparables de la misma localidad cuando hay tres."""
     selected = {
-        "localidad": "LOCALIDAD A",
-        "estrato_predominante": 1,
-        "v_ref_2025": 100,
+        "estrato_predominante": 3,
+        "v_ref_2025": 105,
+        "num_listings_airbnb": 45,
     }
-    profiles = [
-        {
-            "localidad": "LOCALIDAD A",
-            "barrio": "SELECCIONADO",
-            "estrato_predominante": 1,
-            "v_ref_2025": 100,
-            "densidad_airbnb_km2": 5,
-        },
-        {
-            "localidad": "LOCALIDAD A",
-            "barrio": "PAR",
-            "estrato_predominante": 1,
-            "v_ref_2025": 110,
-            "densidad_airbnb_km2": 8,
-        },
-        {
-            "localidad": "LOCALIDAD A",
-            "barrio": "PAR 2",
-            "estrato_predominante": 1,
-            "v_ref_2025": 95,
-            "densidad_airbnb_km2": 10,
-        },
-        {
-            "localidad": "LOCALIDAD B",
-            "barrio": "OTRO BARRIO",
-            "estrato_predominante": 1,
-            "v_ref_2025": 101,
-            "densidad_airbnb_km2": 40,
-        },
-    ]
+    assert comparable_new_listings_limit(selected, profiles) == 5
 
-    assert peer_density_ceiling(selected, profiles) == 10
+    selected["num_listings_airbnb"] = 51
+    assert comparable_new_listings_limit(selected, profiles) == 5
